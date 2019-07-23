@@ -1,0 +1,129 @@
+#######################################################
+# $Description: Tom owns the copyright of this procefure
+#######################################################
+
+
+/* Formatted on 2019/7/23 12:14:16 (QP5 v5.256.13226.35538) */
+CREATE OR REPLACE PROCEDURE SYS.print_table (
+   p_query      IN VARCHAR2,
+   p_date_fmt   IN VARCHAR2 DEFAULT 'dd-mon-yyyy hh24:mi:ss')
+   -- this utility is designed to be installed ONCE in a database and used
+   -- by all.  Also, it is nice to have roles enabled so that queries by
+   -- DBA's that use a role to gain access to the DBA_* views still work
+   -- that is the purpose of AUTHID CURRENT_USER
+   AUTHID CURRENT_USER
+IS
+   l_theCursor     INTEGER DEFAULT DBMS_SQL.open_cursor;
+   l_columnValue   VARCHAR2 (4000);
+   l_status        INTEGER;
+   l_descTbl       DBMS_SQL.desc_tab;
+   l_colCnt        NUMBER;
+   l_cs            VARCHAR2 (255);
+   l_date_fmt      VARCHAR2 (255);
+
+
+   -- small inline procedure to restore the sessions state
+   -- we may have modified the cursor sharing and nls date format
+   -- session variables, this just restores them
+   PROCEDURE restore
+   IS
+   BEGIN
+      IF (UPPER (l_cs) NOT IN ('FORCE', 'SIMILAR'))
+      THEN
+         EXECUTE IMMEDIATE 'alter session set cursor_sharing=exact';
+      END IF;
+
+      IF (p_date_fmt IS NOT NULL)
+      THEN
+         EXECUTE IMMEDIATE
+            'alter session set nls_date_format=''' || l_date_fmt || '''';
+      END IF;
+
+      DBMS_SQL.close_cursor (l_theCursor);
+   END restore;
+BEGIN
+   -- I like to see the dates print out with times, by default, the
+   -- format mask I use includes that.  In order to be "friendly"
+   -- we save the date current sessions date format and then use
+   -- the one with the date and time.  Passing in NULL will cause
+   -- this routine just to use the current date format
+   IF (p_date_fmt IS NOT NULL)
+   THEN
+      SELECT SYS_CONTEXT ('userenv', 'nls_date_format')
+        INTO l_date_fmt
+        FROM DUAL;
+
+
+      EXECUTE IMMEDIATE
+         'alter session set nls_date_format=''' || p_date_fmt || '''';
+   END IF;
+
+
+   -- to be bind variable friendly on this ad-hoc queries, we
+   -- look to see if cursor sharing is already set to FORCE or
+   -- similar, if not, set it so when we parse -- literals
+   -- are replaced with binds
+   IF (DBMS_UTILITY.get_parameter_value ('cursor_sharing', l_status, l_cs) =
+          1)
+   THEN
+      IF (UPPER (l_cs) NOT IN ('FORCE', 'SIMILAR'))
+      THEN
+         EXECUTE IMMEDIATE 'alter session set cursor_sharing=force';
+      END IF;
+   END IF;
+
+
+   -- parse and describe the query sent to us.  we need
+   -- to know the number of columns antheir names.
+   DBMS_SQL.parse (l_theCursor, p_query, DBMS_SQL.native);
+   DBMS_SQL.describe_columns (l_theCursor, l_colCnt, l_descTbl);
+
+
+   -- define all columns to be cast to varchar2's, we
+   -- are just printing them out
+   FOR i IN 1 .. l_colCnt
+   LOOP
+      IF (l_descTbl (i).col_type NOT IN (113))
+      THEN
+         DBMS_SQL.define_column (l_theCursor,
+                                 i,
+                                 l_columnValue,
+                                 4000);
+      END IF;
+   END LOOP;
+
+
+   -- execute the query, so we can fetch
+   l_status := DBMS_SQL.execute (l_theCursor);
+
+
+   -- loop and print out each column on a separate line
+   -- bear in mind that dbms_output only prints 255 characters/line
+   -- so we'll only see the first 200 characters by my design...
+   WHILE (DBMS_SQL.fetch_rows (l_theCursor) > 0)
+   LOOP
+      FOR i IN 1 .. l_colCnt
+      LOOP
+         IF (l_descTbl (i).col_type NOT IN (113))
+         THEN
+            DBMS_SQL.COLUMN_VALUE (l_theCursor, i, l_columnValue);
+            DBMS_OUTPUT.put_line (
+                  RPAD (l_descTbl (i).col_name, 30)
+               || ': '
+               || SUBSTR (l_columnValue, 1, 200));
+         END IF;
+      END LOOP;
+
+      DBMS_OUTPUT.put_line ('-----------------');
+   END LOOP;
+
+
+   -- now, restore the session state, no matter what
+   restore;
+EXCEPTION
+   WHEN OTHERS
+   THEN
+      restore;
+      RAISE;
+END;
+/
