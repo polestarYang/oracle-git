@@ -9,7 +9,7 @@
 #!/bin/sh 
 lsnr_port=1521
 dbuser=oracle
-sid_name=CRMWETL
+sid_name=instance_name
 
 # 
 # Start oracle 
