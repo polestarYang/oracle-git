@@ -1,0 +1,15 @@
+#######################################################
+# $Name: dba_registry_history.txt
+# $Version: v1.0
+# $Author: ethan_yang
+# $Create Date: 2019-10-31
+# $Description:Checking upgrade history of oracle
+#######################################################
+
+set pagesize 200 linesize 200
+col ACTION_TIME for a30
+col action for a10
+col NAMESPACE for a10
+col version for a10
+col COMMENTS for a100
+select ACTION_TIME,ACTION,NAMESPACE,VERSION,COMMENTS from dba_registry_history;
