@@ -1,5 +1,5 @@
 #######################################################
-# $Name: oracle_memory_check.sh
+# $Name: check_shmmax_Oracle.sh
 # $Version: v1.0
 # $Author: ethan_yang
 # $Create Date: 2020-07-24
